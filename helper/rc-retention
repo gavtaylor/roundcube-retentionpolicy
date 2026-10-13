@@ -1,0 +1,148 @@
+#!/bin/bash
+#
+# rc-retention -- privileged helper invoked (via sudo) by the
+# retentionpolicy Roundcube plugin and its nightly runner to list, inspect
+# and expire messages in a user's own mailbox with doveadm.
+#
+# Trust boundary: like sievereplay's rc-sieve-refilter, this script does
+# NOT verify that the caller is actually the user named -- it trusts
+# whoever can invoke it (via sudo, restricted to the webmail PHP-FPM user)
+# to only pass a username it has authenticated (the plugin: the Roundcube
+# session's own user; the runner: users read from Roundcube's own users
+# table). What it does enforce itself, independently of the caller:
+#   - strict validation of every argument;
+#   - the source folder must exist, and differ from the destination;
+#   - every move/expunge is re-filtered server-side by age, and the cutoff
+#     must be at least MIN_AGE_DAYS in the past -- so even a buggy or
+#     compromised caller passing arbitrary UIDs can never touch mail newer
+#     than that.
+#
+# Usage:
+#   rc-retention list    <user>
+#   rc-retention scan    <user> <folder> <before> <basis>
+#   rc-retention move    <user> <folder> <before> <basis> <dest> <uid-set>
+#   rc-retention expunge <user> <folder> <before> <basis> <uid-set>
+#
+# <folder>/<dest> are plain UTF-8 mailbox names (doveadm's form, not IMAP's
+# modified UTF-7). <before> is YYYY-MM-DD. <basis> picks which date counts:
+#   received  when the server received the message (IMAP INTERNALDATE)
+#   saved     when it was saved into this folder (used for Trash, so mail
+#             is aged from when it was deleted, not when it first arrived)
+# <uid-set> is an IMAP sequence set of UIDs ("1:5,9").
+#
+# list  prints one mailbox name per line.
+# scan  prints "<uid><TAB><date>" for each matching message.
+# move  creates (and subscribes) <dest> if it doesn't exist yet, then moves;
+#       prints the number of messages moved.
+# expunge prints the number of messages removed.
+#
+# Exit codes: 2 = bad arguments, 3 = folder problem, otherwise doveadm's.
+
+set -euo pipefail
+
+LOG="/var/log/retentionpolicy-helper.log"
+MIN_AGE_DAYS=7
+
+die() {
+    echo "$2" >&2
+    exit "$1"
+}
+
+log() {
+    printf '%s %s\n' "$(date -Is)" "$*" >> "$LOG" 2>/dev/null || true
+}
+
+[ $# -ge 2 ] || die 2 "Usage: $0 <list|scan|move|expunge> <user> ..."
+
+mode="$1"
+user="$2"
+
+# Same allow-list as rc-sieve-refilter: local-part@domain only.
+[[ "$user" =~ ^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$ ]] || die 2 "Invalid username: $user"
+
+check_folder() {
+    local name="$1"
+    [ -n "$name" ] || die 2 "Folder must not be empty"
+    # No control characters (newlines would corrupt our line-based output).
+    [[ ! "$name" =~ [[:cntrl:]] ]] || die 2 "Invalid folder name"
+    doveadm mailbox status -u "$user" messages "$name" >/dev/null 2>&1 \
+        || die 3 "Folder does not exist: $name"
+}
+
+check_date() {
+    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$1" >/dev/null 2>&1 \
+        || die 2 "Invalid date: $1"
+}
+
+# For anything that changes mail: the cutoff must be old enough.
+check_cutoff() {
+    local limit
+    check_date "$1"
+    limit="$(date -d "-$MIN_AGE_DAYS days" +%F)"
+    [[ ! "$1" > "$limit" ]] || die 2 "Refusing a cutoff newer than $MIN_AGE_DAYS days ($1 > $limit)"
+}
+
+# Sets $search_key / $date_field for the chosen basis.
+check_basis() {
+    case "$1" in
+        received) search_key=BEFORE; date_field=date.received ;;
+        saved) search_key=SAVEDBEFORE; date_field=date.saved ;;
+        *) die 2 "Basis must be 'received' or 'saved', got: $1" ;;
+    esac
+}
+
+check_uids() {
+    [[ "$1" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]] || die 2 "Invalid UID set"
+}
+
+case "$mode" in
+    list)
+        [ $# -eq 2 ] || die 2 "Usage: $0 list <user>"
+        doveadm mailbox list -u "$user"
+        ;;
+
+    scan)
+        [ $# -eq 5 ] || die 2 "Usage: $0 scan <user> <folder> <before> <basis>"
+        folder="$3"; before="$4"
+        check_folder "$folder"
+        check_date "$before"
+        check_basis "$5"
+        # Header row dropped; tab format keeps the date's own space intact.
+        doveadm -f tab fetch -u "$user" "uid $date_field" mailbox "$folder" "$search_key" "$before" | tail -n +2
+        ;;
+
+    move)
+        [ $# -eq 7 ] || die 2 "Usage: $0 move <user> <folder> <before> <basis> <dest> <uid-set>"
+        folder="$3"; before="$4"; dest="$6"; uids="$7"
+        check_folder "$folder"
+        check_cutoff "$before"
+        check_basis "$5"
+        check_uids "$uids"
+        [ -n "$dest" ] && [[ ! "$dest" =~ [[:cntrl:]] ]] || die 2 "Invalid destination folder"
+        [ "$dest" != "$folder" ] || die 2 "Destination is the source folder"
+        if ! doveadm mailbox status -u "$user" messages "$dest" >/dev/null 2>&1; then
+            doveadm mailbox create -u "$user" -s "$dest"
+        fi
+        count="$(doveadm search -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before" | wc -l)"
+        doveadm move -u "$user" "$dest" mailbox "$folder" uid "$uids" "$search_key" "$before"
+        log "user=$user mode=move folder=$folder dest=$dest before=$before basis=$5 count=$count"
+        echo "$count"
+        ;;
+
+    expunge)
+        [ $# -eq 6 ] || die 2 "Usage: $0 expunge <user> <folder> <before> <basis> <uid-set>"
+        folder="$3"; before="$4"; uids="$6"
+        check_folder "$folder"
+        check_cutoff "$before"
+        check_basis "$5"
+        check_uids "$uids"
+        count="$(doveadm search -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before" | wc -l)"
+        doveadm expunge -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before"
+        log "user=$user mode=expunge folder=$folder before=$before basis=$5 count=$count"
+        echo "$count"
+        ;;
+
+    *)
+        die 2 "Unknown mode: $mode"
+        ;;
+esac

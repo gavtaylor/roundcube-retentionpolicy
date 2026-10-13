@@ -1,0 +1,53 @@
+/* retentionpolicy: menu icon (fa-hourglass-half, \f252) for the entry in
+ * the folder-actions menu and the contextmenu plugin's right-click copy
+ * of it. */
+.listing li a.retentionpolicy:before,
+#rcm_folderlist a.retentionpolicy:before {
+    content: "\f252";
+}
+
+/* Bootstrap's .row has -15px side margins (offset by its columns' own
+ * padding, so the content still lines up with the intro text) -- inside a
+ * dialog's scrolling content box that overhang shows up as a horizontal
+ * scrollbar. Nothing visible sits in it, so clip it. */
+.retentionpolicy-dialog {
+    overflow-x: hidden;
+}
+
+.retentionpolicy-dialog .hint {
+    margin-bottom: 1em;
+}
+
+.retentionpolicy-preview {
+    margin-top: 1em;
+    padding: 0.75em 1em;
+    background: rgba(128, 128, 128, 0.08);
+    border: 1px solid rgba(128, 128, 128, 0.25);
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.retentionpolicy-preview:empty {
+    display: none;
+}
+
+.retentionpolicy-busy {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+}
+
+.retentionpolicy-preview.retentionpolicy-error {
+    color: #a5261d;
+    background: rgba(220, 53, 69, 0.08);
+    border-color: rgba(220, 53, 69, 0.3);
+}
+
+html.dark-mode .retentionpolicy-preview.retentionpolicy-error {
+    color: #f28b82;
+}
+
+.retentionpolicy-fixed {
+    display: inline-block;
+    padding-top: 0.375rem;
+}

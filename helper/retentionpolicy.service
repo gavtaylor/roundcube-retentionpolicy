@@ -1,0 +1,12 @@
+# Applies Roundcube retentionpolicy folder policies. Adjust User=, the PHP
+# binary and the Roundcube path for your install -- User must be the same
+# account Roundcube's PHP-FPM pool runs as (it's the one the sudoers rule
+# for rc-retention is written for).
+[Unit]
+Description=Apply Roundcube folder retention policies
+After=dovecot.service mariadb.service
+
+[Service]
+Type=oneshot
+User=apache
+ExecStart=/usr/bin/php /var/www/roundcube/plugins/retentionpolicy/bin/retention-run.php

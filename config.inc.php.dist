@@ -1,0 +1,25 @@
+<?php
+
+$config = [];
+
+// Path to the privileged helper this plugin (and bin/retention-run.php)
+// shells out to in order to list, count, move and expunge messages with
+// doveadm. Only the authenticated user's own username ever crosses the
+// trust boundary -- see helper/README.md for the sudoers rule this expects.
+// Example (sudoers-based, same host as Dovecot):
+//   $config['retentionpolicy_helper'] = 'sudo -n /usr/local/sbin/rc-retention';
+$config['retentionpolicy_helper'] = null;
+
+// Usernames allowed to use this plugin. If left null/empty, ANY logged-in
+// user can set retention policies on their own folders. The nightly runner
+// honours the same list, so removing someone here also stops their
+// policies being applied.
+// Example: $config['retentionpolicy_admins'] = ['joe.bloggs'];
+$config['retentionpolicy_admins'] = null;
+
+// Folder "Archive" policies move mail into when the user hasn't chosen an
+// archive folder in the core archive plugin's settings (archive_mbox). If
+// they have, that folder -- and its archive_type layout (by year, month,
+// ...) -- is used instead, so retention files mail exactly where the
+// Archive button would.
+$config['retentionpolicy_archive_fallback'] = 'Archive';
