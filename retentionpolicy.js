@@ -18,6 +18,7 @@ if (window.rcmail) {
 
         rowOf('period').toggle(action === 'delete' || action === 'archive');
         rowOf('deletemode').toggle(action === 'delete');
+        rowOf('keepflagged').toggle(action === 'delete' || action === 'archive');
 
         retentionpolicyFitDialog($scope);
     }
@@ -37,7 +38,8 @@ if (window.rcmail) {
         var data = {};
 
         $('[name^="_rp_"]', $scope).each(function () {
-            data[this.name] = $(this).val();
+            // .val() on a checkbox is its value whether ticked or not.
+            data[this.name] = this.type === 'checkbox' ? (this.checked ? '1' : '0') : $(this).val();
         });
 
         return data;
@@ -74,7 +76,7 @@ if (window.rcmail) {
         retentionpolicyToggle('_rp_', $content);
         retentionpolicyPreview(data.folder, $content);
 
-        $('select', $content).on('change', function () {
+        $('select, input', $content).on('change', function () {
             retentionpolicyToggle('_rp_', $content);
             retentionpolicyPreview(data.folder, $content);
         });

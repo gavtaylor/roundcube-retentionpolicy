@@ -35,6 +35,10 @@ $labels['deletemode_trash_short'] = 'to Trash';
 $labels['deletemode_expunge_short'] = 'permanently';
 $labels['deletemode_trashfolder'] = 'Deleted permanently, counted from when each message was moved to Trash';
 
+$labels['keepflagged'] = 'Flagged messages';
+$labels['keepflaggedhint'] = 'Keep them (never delete or archive a flagged message)';
+$labels['describe_flaggedtoo'] = 'including flagged';
+$labels['previewflaggedkept'] = '$count flagged message(s) will be kept.';
 $labels['describe_delete'] = 'Delete after $period';
 $labels['describe_archive'] = 'Archive after $period';
 

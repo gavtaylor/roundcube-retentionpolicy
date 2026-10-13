@@ -23,11 +23,13 @@ $e = 'retentionpolicy_engine';
 
 // normalize
 check('normalize: valid delete', $e::normalize(['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge']),
-    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge']);
+    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge', 'keep_flagged' => true]);
 check('normalize: delete mode defaults to trash', $e::normalize(['action' => 'delete', 'period' => '1m']),
-    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'trash']);
+    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'trash', 'keep_flagged' => true]);
 check('normalize: archive drops delete_mode', $e::normalize(['action' => 'archive', 'period' => '1y', 'delete_mode' => 'expunge']),
-    ['action' => 'archive', 'period' => '1y']);
+    ['action' => 'archive', 'period' => '1y', 'keep_flagged' => true]);
+check('normalize: keep_flagged can be turned off', $e::normalize(['action' => 'delete', 'period' => '1m', 'keep_flagged' => false])['keep_flagged'], false);
+check('normalize: keep_flagged survives inheritance', $e::effective('A/B', ['A' => ['action' => 'archive', 'period' => '1y', 'keep_flagged' => false]], '/')['policy']['keep_flagged'], false);
 check('normalize: never needs no period', $e::normalize(['action' => 'never']), ['action' => 'never']);
 check('normalize: unknown action rejected', $e::normalize(['action' => 'retain', 'period' => '1y']), null);
 check('normalize: unknown period rejected', $e::normalize(['action' => 'delete', 'period' => '3d']), null);

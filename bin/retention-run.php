@@ -149,7 +149,10 @@ foreach ($accounts as $user => $account) {
         $before = retentionpolicy_engine::cutoff($policy['period']);
         $basis = retentionpolicy_engine::date_basis($folder, $trash, $delimiter);
 
-        [$exit, $rows] = $run_helper(['scan', $user, $folder_utf8, $before, $basis]);
+        // Optional trailing helper argument: flagged messages are exempt.
+        $flag_arg = $policy['keep_flagged'] ? ['keep-flagged'] : [];
+
+        [$exit, $rows] = $run_helper(array_merge(['scan', $user, $folder_utf8, $before, $basis], $flag_arg));
         if ($exit !== 0) {
             $report($user, "folder={$folder_utf8} error=scan-failed output=" . implode(' ', $rows));
             $exit_status = 1;
@@ -177,7 +180,8 @@ foreach ($accounts as $user => $account) {
             $set = retentionpolicy_engine::uid_set($uids);
             $desc = "folder={$folder_utf8} action={$action} policy=" . $policy['action'] . '/' . $policy['period']
                 . ' from=' . $to_utf8($effective['from']) . " before={$before} basis={$basis}"
-                . ($dest !== '' ? ' dest=' . $to_utf8($dest) : '') . ' count=' . count($uids);
+                . ($dest !== '' ? ' dest=' . $to_utf8($dest) : '') . ' keep_flagged=' . ($policy['keep_flagged'] ? 'yes' : 'no')
+                . ' count=' . count($uids);
 
             if ($dry_run) {
                 $report($user, $desc);
@@ -185,8 +189,8 @@ foreach ($accounts as $user => $account) {
             }
 
             [$exit, $out] = $action === 'expunge'
-                ? $run_helper(['expunge', $user, $folder_utf8, $before, $basis, $set])
-                : $run_helper(['move', $user, $folder_utf8, $before, $basis, $to_utf8($dest), $set]);
+                ? $run_helper(array_merge(['expunge', $user, $folder_utf8, $before, $basis, $set], $flag_arg))
+                : $run_helper(array_merge(['move', $user, $folder_utf8, $before, $basis, $to_utf8($dest), $set], $flag_arg));
 
             if ($exit !== 0) {
                 $report($user, $desc . ' error=' . implode(' ', $out));

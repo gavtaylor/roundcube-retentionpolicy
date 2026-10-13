@@ -35,6 +35,18 @@ The helper's own guards were each tested: it refuses a bad username, a
 missing folder, a destination that's the same as the source, an unknown date
 basis, and a cutoff newer than 7 days.
 
+**Flagged messages (v0.2.0)** were tested on a throwaway folder of 20 old
+messages, 3 of them flagged:
+- the dialog's preview showed 17 to move and "3 flagged message(s) will be
+  kept", and 20 with the toggle off;
+- the Settings → Folders toggle saved both ways;
+- the runner's dry run planned 17;
+- given **all 20** message IDs, the helper moved only the 17 unflagged ones,
+  so a flagged message is protected server-side even if a caller asks for it.
+
+Older callers that don't pass the new optional `keep-flagged` argument still
+work with the new helper.
+
 Bugs found and fixed while testing:
 - The dialog had a horizontal scrollbar, because Elastic turns a propform
   table into Bootstrap rows with negative margins. It now uses core's own
@@ -69,9 +81,15 @@ under **Settings → Folders**. All three open the same options:
   - **Keep forever.** Shown when there's a parent policy to override; stops it
     applying here and in this folder's subfolders.
 - **Older than:** 1 week, 2 weeks, 1, 2, 3 or 6 months, or 1, 2, 5 or 10 years.
+- **Flagged messages:** kept by default. A flagged (starred) message is never
+  deleted or archived, whatever the folder's policy says. This is the
+  per-message "never delete" override, like Outlook's per-item retention tag.
+  A folder full of notifications can expire everything while you star the odd
+  one worth keeping, from webmail or any other mail app, since flags sync over
+  IMAP. Turn it off for a folder if flags there shouldn't count.
 
 The dialog shows a live count of how many messages the policy would affect if
-it ran tonight.
+it ran tonight, and how many flagged messages it's keeping.
 
 Outlook/Purview also has a "Retain" policy, meaning mail that can't be deleted.
 It isn't offered here: any IMAP client can still delete mail, so a webmail

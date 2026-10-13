@@ -119,6 +119,12 @@ class retentionpolicy_engine
                 ? $policy['delete_mode'] : 'trash';
         }
 
+        // Flagged (starred) messages are exempt -- the per-message "never
+        // delete" override, like Outlook's per-item retention tag. On unless
+        // explicitly turned off, which also covers policies saved before
+        // this option existed.
+        $normalized['keep_flagged'] = (bool) ($policy['keep_flagged'] ?? true);
+
         return $normalized;
     }
 

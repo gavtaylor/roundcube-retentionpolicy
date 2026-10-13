@@ -25,6 +25,8 @@ The helper doesn't just trust its caller's choice of messages. Every move or
 expunge is filtered again on the server by age (`BEFORE` / `SAVEDBEFORE`),
 and it refuses any cutoff less than 7 days old. So even a buggy or
 compromised caller passing arbitrary message UIDs can't touch recent mail.
+With the optional `keep-flagged` argument it also adds `NOT FLAGGED`, so a
+flagged message is never moved or expunged under such a policy.
 
 ## Installation
 
@@ -32,6 +34,8 @@ On the mail server, as root:
 
 ```bash
 install -o root -g root -m 0700 rc-retention /usr/local/sbin/rc-retention
+# Upgrading from v0.1.x: install this new helper *before* the new plugin --
+# v0.2.0 passes an optional argument the old helper rejects.
 install -o root -g root -m 0644 /dev/null /var/log/retentionpolicy-helper.log
 ```
 

@@ -158,6 +158,9 @@ class retentionpolicy extends rcube_plugin
             'action' => $action,
             'period' => rcube_utils::get_input_string($prefix . 'period', rcube_utils::INPUT_POST),
             'delete_mode' => rcube_utils::get_input_string($prefix . 'deletemode', rcube_utils::INPUT_POST),
+            // A checkbox: the dialog always posts '1'/'0'; the Settings form
+            // omits it entirely when unticked.
+            'keep_flagged' => rcube_utils::get_input_string($prefix . 'keepflagged', rcube_utils::INPUT_POST) === '1',
         ]);
     }
 
@@ -203,11 +206,15 @@ class retentionpolicy extends rcube_plugin
             $text .= ' (' . $this->gettext('deletemode_' . $policy['delete_mode'] . '_short') . ')';
         }
 
+        if (empty($policy['keep_flagged'])) {
+            $text .= ', ' . $this->gettext('describe_flaggedtoo');
+        }
+
         return $text;
     }
 
     /**
-     * The three policy fields as [id => [label, html]] rows. $prefix keeps
+     * The policy fields as [id => [label, html]] rows. $prefix keeps
      * the dialog's and the settings form's field names apart.
      */
     private function form_fields(string $folder, string $prefix): array
@@ -260,6 +267,10 @@ class retentionpolicy extends rcube_plugin
             'action' => [$this->gettext('policy'), $action->show($own ? $own['action'] : 'inherit')],
             'period' => [$this->gettext('period'), $period->show($own['period'] ?? '1y')],
             'deletemode' => [$this->gettext('deletemode'), $mode_html],
+            'keepflagged' => [$this->gettext('keepflagged'), html::label(['class' => 'retentionpolicy-check'],
+                (new html_checkbox(['name' => $prefix . 'keepflagged', 'id' => $prefix . 'keepflagged', 'value' => '1']))
+                    ->show(($own['keep_flagged'] ?? true) ? '1' : '')
+                . ' ' . rcube::Q($this->gettext('keepflaggedhint')))],
         ];
     }
 
@@ -353,17 +364,28 @@ class retentionpolicy extends rcube_plugin
 
         $before = retentionpolicy_engine::cutoff($effective['policy']['period']);
         $basis = retentionpolicy_engine::date_basis($folder, $this->trash_folder(), $delimiter);
-        $result = $this->helper(['scan', $this->rcube->get_user_name(), $this->utf8($folder), $before, $basis]);
+        $scan = [$this->rcube->get_user_name(), $this->utf8($folder), $before, $basis];
+        $result = $this->helper(array_merge(['scan'], $scan, $effective['policy']['keep_flagged'] ? ['keep-flagged'] : []));
+        $count_lines = fn ($output) => count(array_filter(explode("\n", $output), 'strlen'));
 
         if ($result['exit'] !== 0) {
             $text = $this->gettext('previewerror') . ' ' . $result['output'];
         } else {
-            $count = count(array_filter(explode("\n", $result['output']), 'strlen'));
+            $count = $count_lines($result['output']);
             $text = $this->gettext(['name' => 'preview_' . $action . ($basis === 'saved' ? '_saved' : ''), 'vars' => [
                 'count' => $count,
                 'period' => $this->gettext('period_' . $effective['policy']['period']),
                 'archive' => rcmail_action::localize_foldername($this->archive_folder(), true),
             ]]);
+
+            // How many flagged messages the policy is skipping, so it's
+            // visible that the exemption is doing its job.
+            if ($effective['policy']['keep_flagged']) {
+                $all = $this->helper(array_merge(['scan'], $scan));
+                if ($all['exit'] === 0 && ($kept = $count_lines($all['output']) - $count) > 0) {
+                    $text .= ' ' . $this->gettext(['name' => 'previewflaggedkept', 'vars' => ['count' => $kept]]);
+                }
+            }
         }
 
         $this->rcube->output->command('plugin.retentionpolicy_preview', ['text' => $text, 'error' => $result['exit'] !== 0]);
