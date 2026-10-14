@@ -47,6 +47,16 @@ messages, 3 of them flagged:
 Older callers that don't pass the new optional `keep-flagged` argument still
 work with the new helper.
 
+**Unread messages (v0.3.0)** were tested the same way: 20 old messages, 5
+unread and 3 flagged, one of them both.
+- The preview showed 17 to go with flagged only, 15 with unread only, and 13
+  with both on ("7 flagged or unread message(s) will be kept").
+- Both toggles saved from the dialog and from Settings → Folders.
+- The runner planned 13 with both options on.
+- Given all 20 message IDs with both options, the helper moved only the 13
+  read, unflagged ones.
+- The helper rejects any option other than `keep-flagged` and `keep-unread`.
+
 Bugs found and fixed while testing:
 - The dialog had a horizontal scrollbar, because Elastic turns a propform
   table into Bootstrap rows with negative margins. It now uses core's own
@@ -87,9 +97,13 @@ under **Settings → Folders**. All three open the same options:
   A folder full of notifications can expire everything while you star the odd
   one worth keeping, from webmail or any other mail app, since flags sync over
   IMAP. Turn it off for a folder if flags there shouldn't count.
+- **Unread messages:** off by default. Turn it on and an unread message is
+  never deleted or archived, so a folder only clears what you've actually
+  read. It's off by default so that adding the option never quietly changed
+  what an existing policy removes.
 
 The dialog shows a live count of how many messages the policy would affect if
-it ran tonight, and how many flagged messages it's keeping.
+it ran tonight, and how many flagged and/or unread messages it's keeping.
 
 Outlook/Purview also has a "Retain" policy, meaning mail that can't be deleted.
 It isn't offered here: any IMAP client can still delete mail, so a webmail

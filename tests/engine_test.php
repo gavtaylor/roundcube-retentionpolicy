@@ -23,11 +23,16 @@ $e = 'retentionpolicy_engine';
 
 // normalize
 check('normalize: valid delete', $e::normalize(['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge']),
-    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge', 'keep_flagged' => true]);
+    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'expunge', 'keep_flagged' => true, 'keep_unread' => false]);
 check('normalize: delete mode defaults to trash', $e::normalize(['action' => 'delete', 'period' => '1m']),
-    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'trash', 'keep_flagged' => true]);
+    ['action' => 'delete', 'period' => '1m', 'delete_mode' => 'trash', 'keep_flagged' => true, 'keep_unread' => false]);
 check('normalize: archive drops delete_mode', $e::normalize(['action' => 'archive', 'period' => '1y', 'delete_mode' => 'expunge']),
-    ['action' => 'archive', 'period' => '1y', 'keep_flagged' => true]);
+    ['action' => 'archive', 'period' => '1y', 'keep_flagged' => true, 'keep_unread' => false]);
+check('normalize: keep_unread defaults off', $e::normalize(['action' => 'delete', 'period' => '1m'])['keep_unread'], false);
+check('normalize: keep_unread can be turned on', $e::normalize(['action' => 'archive', 'period' => '1y', 'keep_unread' => true])['keep_unread'], true);
+check('helper_options: flagged only (defaults)', $e::helper_options($e::normalize(['action' => 'delete', 'period' => '1m'])), ['keep-flagged']);
+check('helper_options: both', $e::helper_options(['keep_flagged' => true, 'keep_unread' => true]), ['keep-flagged', 'keep-unread']);
+check('helper_options: neither', $e::helper_options(['keep_flagged' => false, 'keep_unread' => false]), []);
 check('normalize: keep_flagged can be turned off', $e::normalize(['action' => 'delete', 'period' => '1m', 'keep_flagged' => false])['keep_flagged'], false);
 check('normalize: keep_flagged survives inheritance', $e::effective('A/B', ['A' => ['action' => 'archive', 'period' => '1y', 'keep_flagged' => false]], '/')['policy']['keep_flagged'], false);
 check('normalize: never needs no period', $e::normalize(['action' => 'never']), ['action' => 'never']);

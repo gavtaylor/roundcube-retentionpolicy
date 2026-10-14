@@ -149,8 +149,8 @@ foreach ($accounts as $user => $account) {
         $before = retentionpolicy_engine::cutoff($policy['period']);
         $basis = retentionpolicy_engine::date_basis($folder, $trash, $delimiter);
 
-        // Optional trailing helper argument: flagged messages are exempt.
-        $flag_arg = $policy['keep_flagged'] ? ['keep-flagged'] : [];
+        // Optional trailing helper options: flagged / unread exemptions.
+        $flag_arg = retentionpolicy_engine::helper_options($policy);
 
         [$exit, $rows] = $run_helper(array_merge(['scan', $user, $folder_utf8, $before, $basis], $flag_arg));
         if ($exit !== 0) {
@@ -180,7 +180,7 @@ foreach ($accounts as $user => $account) {
             $set = retentionpolicy_engine::uid_set($uids);
             $desc = "folder={$folder_utf8} action={$action} policy=" . $policy['action'] . '/' . $policy['period']
                 . ' from=' . $to_utf8($effective['from']) . " before={$before} basis={$basis}"
-                . ($dest !== '' ? ' dest=' . $to_utf8($dest) : '') . ' keep_flagged=' . ($policy['keep_flagged'] ? 'yes' : 'no')
+                . ($dest !== '' ? ' dest=' . $to_utf8($dest) : '') . ' keep=' . (implode(',', $flag_arg) ?: 'none')
                 . ' count=' . count($uids);
 
             if ($dry_run) {

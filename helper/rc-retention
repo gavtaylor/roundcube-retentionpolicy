@@ -19,9 +19,9 @@
 #
 # Usage:
 #   rc-retention list    <user>
-#   rc-retention scan    <user> <folder> <before> <basis> [keep-flagged]
-#   rc-retention move    <user> <folder> <before> <basis> <dest> <uid-set> [keep-flagged]
-#   rc-retention expunge <user> <folder> <before> <basis> <uid-set> [keep-flagged]
+#   rc-retention scan    <user> <folder> <before> <basis> [option...]
+#   rc-retention move    <user> <folder> <before> <basis> <dest> <uid-set> [option...]
+#   rc-retention expunge <user> <folder> <before> <basis> <uid-set> [option...]
 #
 # <folder>/<dest> are plain UTF-8 mailbox names (doveadm's form, not IMAP's
 # modified UTF-7). <before> is YYYY-MM-DD. <basis> picks which date counts:
@@ -29,9 +29,12 @@
 #   saved     when it was saved into this folder (used for Trash, so mail
 #             is aged from when it was deleted, not when it first arrived)
 # <uid-set> is an IMAP sequence set of UIDs ("1:5,9").
-# keep-flagged (optional, literal) excludes flagged/starred messages from the
-# search -- enforced here too, so a flagged message can't be moved or
-# expunged under such a policy whatever UIDs the caller passes.
+# Options (optional, literal, any order), each enforced here too so a
+# protected message can't be moved or expunged whatever UIDs the caller
+# passes:
+#   keep-flagged  exclude flagged/starred messages (adds NOT FLAGGED)
+#   keep-unread   exclude unread messages (adds SEEN, so only read mail
+#                 can expire)
 #
 # list  prints one mailbox name per line.
 # scan  prints "<uid><TAB><date>" for each matching message.
@@ -94,13 +97,21 @@ check_basis() {
     esac
 }
 
-# Sets $flag_filter (extra search keys) from an optional last argument.
-check_keep_flagged() {
-    case "${1:-}" in
-        "") flag_filter=() ;;
-        keep-flagged) flag_filter=(NOT FLAGGED) ;;
-        *) die 2 "Optional last argument must be 'keep-flagged', got: $1" ;;
-    esac
+# Sets $flag_filter (extra search keys) and $options_log from the optional
+# trailing options.
+check_options() {
+    local opt
+    flag_filter=()
+    options_log=""
+    for opt in "$@"; do
+        case "$opt" in
+            keep-flagged) flag_filter+=(NOT FLAGGED) ;;
+            keep-unread) flag_filter+=(SEEN) ;;
+            *) die 2 "Unknown option '$opt' (expected keep-flagged and/or keep-unread)" ;;
+        esac
+        options_log="$options_log,$opt"
+    done
+    options_log="${options_log#,}"
 }
 
 check_uids() {
@@ -114,23 +125,23 @@ case "$mode" in
         ;;
 
     scan)
-        [ $# -eq 5 ] || [ $# -eq 6 ] || die 2 "Usage: $0 scan <user> <folder> <before> <basis> [keep-flagged]"
+        [ $# -ge 5 ] && [ $# -le 7 ] || die 2 "Usage: $0 scan <user> <folder> <before> <basis> [option...]"
         folder="$3"; before="$4"
         check_folder "$folder"
         check_date "$before"
         check_basis "$5"
-        check_keep_flagged "${6:-}"
+        check_options "${@:6}"
         # Header row dropped; tab format keeps the date's own space intact.
         doveadm -f tab fetch -u "$user" "uid $date_field" mailbox "$folder" "$search_key" "$before" "${flag_filter[@]}" | tail -n +2
         ;;
 
     move)
-        [ $# -eq 7 ] || [ $# -eq 8 ] || die 2 "Usage: $0 move <user> <folder> <before> <basis> <dest> <uid-set> [keep-flagged]"
+        [ $# -ge 7 ] && [ $# -le 9 ] || die 2 "Usage: $0 move <user> <folder> <before> <basis> <dest> <uid-set> [option...]"
         folder="$3"; before="$4"; dest="$6"; uids="$7"
         check_folder "$folder"
         check_cutoff "$before"
         check_basis "$5"
-        check_keep_flagged "${8:-}"
+        check_options "${@:8}"
         check_uids "$uids"
         [ -n "$dest" ] && [[ ! "$dest" =~ [[:cntrl:]] ]] || die 2 "Invalid destination folder"
         [ "$dest" != "$folder" ] || die 2 "Destination is the source folder"
@@ -139,21 +150,21 @@ case "$mode" in
         fi
         count="$(doveadm search -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before" "${flag_filter[@]}" | wc -l)"
         doveadm move -u "$user" "$dest" mailbox "$folder" uid "$uids" "$search_key" "$before" "${flag_filter[@]}"
-        log "user=$user mode=move folder=$folder dest=$dest before=$before basis=$5 keep_flagged=${8:+yes} count=$count"
+        log "user=$user mode=move folder=$folder dest=$dest before=$before basis=$5 options=${options_log:-none} count=$count"
         echo "$count"
         ;;
 
     expunge)
-        [ $# -eq 6 ] || [ $# -eq 7 ] || die 2 "Usage: $0 expunge <user> <folder> <before> <basis> <uid-set> [keep-flagged]"
+        [ $# -ge 6 ] && [ $# -le 8 ] || die 2 "Usage: $0 expunge <user> <folder> <before> <basis> <uid-set> [option...]"
         folder="$3"; before="$4"; uids="$6"
         check_folder "$folder"
         check_cutoff "$before"
         check_basis "$5"
-        check_keep_flagged "${7:-}"
+        check_options "${@:7}"
         check_uids "$uids"
         count="$(doveadm search -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before" "${flag_filter[@]}" | wc -l)"
         doveadm expunge -u "$user" mailbox "$folder" uid "$uids" "$search_key" "$before" "${flag_filter[@]}"
-        log "user=$user mode=expunge folder=$folder before=$before basis=$5 keep_flagged=${7:+yes} count=$count"
+        log "user=$user mode=expunge folder=$folder before=$before basis=$5 options=${options_log:-none} count=$count"
         echo "$count"
         ;;
 

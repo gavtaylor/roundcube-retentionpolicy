@@ -19,6 +19,7 @@ if (window.rcmail) {
         rowOf('period').toggle(action === 'delete' || action === 'archive');
         rowOf('deletemode').toggle(action === 'delete');
         rowOf('keepflagged').toggle(action === 'delete' || action === 'archive');
+        rowOf('keepunread').toggle(action === 'delete' || action === 'archive');
 
         retentionpolicyFitDialog($scope);
     }

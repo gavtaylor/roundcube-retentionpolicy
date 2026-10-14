@@ -125,7 +125,25 @@ class retentionpolicy_engine
         // this option existed.
         $normalized['keep_flagged'] = (bool) ($policy['keep_flagged'] ?? true);
 
+        // Unread messages: exempt only when asked. Off by default so
+        // turning this feature on never silently changes an existing
+        // policy (a Marketing folder full of unread mail would otherwise
+        // stop being cleared).
+        $normalized['keep_unread'] = (bool) ($policy['keep_unread'] ?? false);
+
         return $normalized;
+    }
+
+    /**
+     * The helper's trailing options for a policy's exemptions -- shared by
+     * the nightly runner and the dialog's preview so they can't drift.
+     */
+    public static function helper_options(array $policy): array
+    {
+        return array_merge(
+            empty($policy['keep_flagged']) ? [] : ['keep-flagged'],
+            empty($policy['keep_unread']) ? [] : ['keep-unread']
+        );
     }
 
     /**

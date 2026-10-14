@@ -161,6 +161,7 @@ class retentionpolicy extends rcube_plugin
             // A checkbox: the dialog always posts '1'/'0'; the Settings form
             // omits it entirely when unticked.
             'keep_flagged' => rcube_utils::get_input_string($prefix . 'keepflagged', rcube_utils::INPUT_POST) === '1',
+            'keep_unread' => rcube_utils::get_input_string($prefix . 'keepunread', rcube_utils::INPUT_POST) === '1',
         ]);
     }
 
@@ -208,6 +209,10 @@ class retentionpolicy extends rcube_plugin
 
         if (empty($policy['keep_flagged'])) {
             $text .= ', ' . $this->gettext('describe_flaggedtoo');
+        }
+
+        if (!empty($policy['keep_unread'])) {
+            $text .= ', ' . $this->gettext('describe_keepsunread');
         }
 
         return $text;
@@ -271,6 +276,10 @@ class retentionpolicy extends rcube_plugin
                 (new html_checkbox(['name' => $prefix . 'keepflagged', 'id' => $prefix . 'keepflagged', 'value' => '1']))
                     ->show(($own['keep_flagged'] ?? true) ? '1' : '')
                 . ' ' . rcube::Q($this->gettext('keepflaggedhint')))],
+            'keepunread' => [$this->gettext('keepunread'), html::label(['class' => 'retentionpolicy-check'],
+                (new html_checkbox(['name' => $prefix . 'keepunread', 'id' => $prefix . 'keepunread', 'value' => '1']))
+                    ->show(($own['keep_unread'] ?? false) ? '1' : '')
+                . ' ' . rcube::Q($this->gettext('keepunreadhint')))],
         ];
     }
 
@@ -365,7 +374,8 @@ class retentionpolicy extends rcube_plugin
         $before = retentionpolicy_engine::cutoff($effective['policy']['period']);
         $basis = retentionpolicy_engine::date_basis($folder, $this->trash_folder(), $delimiter);
         $scan = [$this->rcube->get_user_name(), $this->utf8($folder), $before, $basis];
-        $result = $this->helper(array_merge(['scan'], $scan, $effective['policy']['keep_flagged'] ? ['keep-flagged'] : []));
+        $options = retentionpolicy_engine::helper_options($effective['policy']);
+        $result = $this->helper(array_merge(['scan'], $scan, $options));
         $count_lines = fn ($output) => count(array_filter(explode("\n", $output), 'strlen'));
 
         if ($result['exit'] !== 0) {
@@ -378,12 +388,13 @@ class retentionpolicy extends rcube_plugin
                 'archive' => rcmail_action::localize_foldername($this->archive_folder(), true),
             ]]);
 
-            // How many flagged messages the policy is skipping, so it's
-            // visible that the exemption is doing its job.
-            if ($effective['policy']['keep_flagged']) {
+            // How many messages the exemptions are keeping, so it's visible
+            // that they're doing their job.
+            if ($options) {
                 $all = $this->helper(array_merge(['scan'], $scan));
                 if ($all['exit'] === 0 && ($kept = $count_lines($all['output']) - $count) > 0) {
-                    $text .= ' ' . $this->gettext(['name' => 'previewflaggedkept', 'vars' => ['count' => $kept]]);
+                    $which = count($options) === 2 ? 'both' : ($options[0] === 'keep-flagged' ? 'flagged' : 'unread');
+                    $text .= ' ' . $this->gettext(['name' => 'previewkept_' . $which, 'vars' => ['count' => $kept]]);
                 }
             }
         }
